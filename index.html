@@ -400,7 +400,7 @@
     </div>
     <div class="search-wrap">
       <span class="search-icon">🔍</span>
-      <input type="text" class="search-input" id="searchInput" placeholder="Search part, code, location..." oninput="handleSearch(this.value)">
+      <input type="text" class="search-input" id="searchInput" placeholder="Search part, code, location..." oninput="handleSearch(this.value)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <button class="search-clear" id="clearBtn" onclick="clearSearch()">✕</button>
     </div>
     <div class="stats-bar" id="statsBar">Loading...</div>
@@ -426,8 +426,8 @@
     <div class="modal-handle"></div>
     <div class="modal-title" id="modalTitle">➕ New Part</div>
     <div class="form-group"><label class="form-label">Part Name *</label><input type="text" class="form-input" id="fName" placeholder="e.g. PANTOGRAPH Sliding Strip"></div>
-    <div class="form-group"><label class="form-label">Material Code</label><input type="text" class="form-input" id="fCode" placeholder="e.g. 10060691"></div>
-    <div class="form-group"><label class="form-label">Location</label><input type="text" class="form-input" id="fLocation" placeholder="e.g. HM-5R"></div>
+    <div class="form-group"><label class="form-label">Material Code</label><input type="text" class="form-input" id="fCode" placeholder="e.g. 10060691" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
+    <div class="form-group"><label class="form-label">Location</label><input type="text" class="form-input" id="fLocation" placeholder="e.g. HM-5R" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
     <div class="form-group">
       <label class="form-label">Subsystem</label>
       <select class="form-select" id="fSystem">
@@ -440,7 +440,7 @@
       </select>
     </div>
     <div class="form-group"><label class="form-label">Utilization / Description</label><input type="text" class="form-input" id="fUtil" placeholder="e.g. High voltage, Cafeteria..."></div>
-    <div class="form-group"><label class="form-label">Image URL</label><input type="text" class="form-input" id="fImage" placeholder="e.g. https://example.com/image.jpg"></div>
+    <div class="form-group"><label class="form-label">Image URL</label><input type="text" class="form-input" id="fImage" placeholder="e.g. https://example.com/image.jpg" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
     <div class="form-group" style="display:flex;gap:10px;align-items:center;">
       <button type="button" class="btn-cancel" style="flex:1;min-width:0;" onclick="removeImage()">إزالة الصورة</button>
       <input type="file" class="form-input" id="fImageFile" accept="image/*" onchange="loadImageFile(event)" style="flex:2;min-width:0;" />
@@ -474,7 +474,21 @@
     <div class="modal-title">🗑️ سلة المحذوفات</div>
     <div id="trashList"></div>
     <div class="modal-footer">
+      <button class="btn-cancel" style="flex:1" onclick="askRestoreCatalog()">↩️ استعادة القطع الأصلية</button>
       <button class="btn-cancel" style="flex:1" onclick="closeTrash()">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM RESTORE CATALOG -->
+<div class="confirm-overlay" id="restoreCatalogConfirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">↩️</div>
+    <div class="confirm-title">استعادة القطع الأصلية؟</div>
+    <div class="confirm-text">سيتم إضافة كل القطع الأصلية (228 قطعة) من جديد. القطع الحالية الموجودة تبقى كما هي ولن تُحذف أو تتكرر.</div>
+    <div class="confirm-btns">
+      <button class="btn-no" onclick="closeRestoreCatalogConfirm()">إلغاء</button>
+      <button class="btn-yes" style="background:var(--accent);color:#171310;" onclick="confirmRestoreCatalog()">استعادة</button>
     </div>
   </div>
 </div>
@@ -498,8 +512,8 @@
     <div class="modal-handle"></div>
     <div class="modal-title">📩 طلب إضافة قطعة</div>
     <div class="form-group"><label class="form-label">اسم القطعة *</label><input type="text" class="form-input" id="rName" placeholder="مثال: PANTOGRAPH Sliding Strip"></div>
-    <div class="form-group"><label class="form-label">رقم القطعة (إن وجد)</label><input type="text" class="form-input" id="rCode" placeholder="مثال: 10060691" dir="rtl" style="text-align:right"></div>
-    <div class="form-group"><label class="form-label">الموقع (إن وجد)</label><input type="text" class="form-input" id="rLocation" placeholder="مثال: HM-5R"></div>
+    <div class="form-group"><label class="form-label">رقم القطعة (إن وجد)</label><input type="text" class="form-input" id="rCode" placeholder="مثال: 10060691" dir="rtl" style="text-align:right" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
+    <div class="form-group"><label class="form-label">الموقع (إن وجد)</label><input type="text" class="form-input" id="rLocation" placeholder="مثال: HM-5R" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
     <div class="form-group">
       <label class="form-label">النظام الفرعي</label>
       <select class="form-select" id="rSystem">
@@ -924,8 +938,9 @@ function isTempAccessActive() { return !!(tempAccess && tempAccess.expiresAt > D
 function initFirebaseSync() {
   db.ref('parts').on('value', snap => {
     const val = snap.val();
-    if (val === null) {
-      // أول تشغيل للموقع: نزرع البيانات الأولية مرة واحدة على السيرفر
+    const isEmpty = val === null || (Array.isArray(val) && val.length === 0);
+    if (isEmpty) {
+      // القاعدة فاضية (أول تشغيل، أو انمسحت البيانات بالغلط): نزرع البيانات الأولية على السيرفر
       db.ref('parts').set(INITIAL_DATA.map((p, i) => ({...p, id: Date.now() + i})));
       return;
     }
@@ -1456,6 +1471,25 @@ function confirmPurge() {
   purgingId = null;
 }
 
+function askRestoreCatalog() {
+  if (currentRole !== 'admin') return;
+  document.getElementById('restoreCatalogConfirmOverlay').classList.add('show');
+}
+function closeRestoreCatalogConfirm() { document.getElementById('restoreCatalogConfirmOverlay').classList.remove('show'); }
+function confirmRestoreCatalog() {
+  if (currentRole !== 'admin') return;
+  const existingCodes = new Set(parts.map(p => (p.code||'').trim().toLowerCase()).filter(Boolean));
+  const missing = INITIAL_DATA.filter(p => !p.code || !existingCodes.has(p.code.trim().toLowerCase()));
+  if (!missing.length) {
+    closeRestoreCatalogConfirm();
+    showToast('✅ كل القطع الأصلية موجودة أصلاً');
+    return;
+  }
+  parts = [...parts, ...missing.map((p, i) => ({...p, id: Date.now() + i}))];
+  save(); closeRestoreCatalogConfirm(); renderFilters(); renderCards();
+  showToast(`↩️ تمت استعادة ${missing.length} قطعة`);
+}
+
 // PART REQUESTS (viewer submits, admin reviews)
 function openRequestModal() {
   if (currentRole !== 'viewer') return;
@@ -1619,7 +1653,7 @@ function closeImagePreview(event) {
   document.getElementById('imagePreviewOverlay').classList.remove('show');
 }
 
-document.addEventListener('keydown', e => { if (e.key==='Escape') { closeModal(); closeConfirm(); closeTrash(); closePurgeConfirm(); closeRequestModal(); closeRequests(); closeRequestDetail(); closeRejectConfirm(); closeTempAccessModal(); document.getElementById('imagePreviewOverlay').classList.remove('show'); } });
+document.addEventListener('keydown', e => { if (e.key==='Escape') { closeModal(); closeConfirm(); closeTrash(); closePurgeConfirm(); closeRequestModal(); closeRequests(); closeRequestDetail(); closeRejectConfirm(); closeTempAccessModal(); closeRestoreCatalogConfirm(); document.getElementById('imagePreviewOverlay').classList.remove('show'); } });
 document.getElementById('pwdInput').addEventListener('keydown', e => { if (e.key==='Enter') tryLogin(); });
 </script>
 </body>
